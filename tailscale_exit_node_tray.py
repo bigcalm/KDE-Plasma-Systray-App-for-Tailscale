@@ -103,10 +103,6 @@ class TailscaleExitNodeTray:
     def load_state(self) -> AppState:
         try:
             status_data = self.run_command([TAILSCALE_COMMAND, "status", "--json"])
-            exit_node_output = self.run_command(
-                [TAILSCALE_COMMAND, "exit-node", "list"],
-                expect_json=False,
-            )
         except CommandError as error:
             return AppState(
                 tray_state=STATUS_NOT_CONNECTED,
@@ -115,6 +111,17 @@ class TailscaleExitNodeTray:
                 exit_nodes=[],
                 error_message=error.user_message,
             )
+
+        exit_nodes: list[ExitNode] = []
+        error_message = None
+        try:
+            exit_node_output = self.run_command(
+                [TAILSCALE_COMMAND, "exit-node", "list"],
+                expect_json=False,
+            )
+            exit_nodes = self.parse_exit_node_list(exit_node_output)
+        except CommandError as error:
+            error_message = error.user_message
 
         backend_state = str(status_data.get("BackendState") or "unknown")
         auth_url = status_data.get("AuthURL") or ""
@@ -133,7 +140,8 @@ class TailscaleExitNodeTray:
             tray_state=tray_state,
             backend_state=backend_state,
             current_exit_node=current_exit_node,
-            exit_nodes=self.parse_exit_node_list(exit_node_output),
+            exit_nodes=exit_nodes,
+            error_message=error_message,
         )
 
     def rebuild_menu(self, state: AppState) -> None:
@@ -295,22 +303,46 @@ class TailscaleExitNodeTray:
         return nodes
 
     def find_current_exit_node(self, status_data: dict) -> str | None:
+        exit_node_status = status_data.get("ExitNodeStatus") or {}
+        if exit_node_status:
+            peer = self.find_peer_by_id(status_data, str(exit_node_status.get("ID") or ""))
+            if peer:
+                return self.describe_peer(peer)
+
+            ips = exit_node_status.get("TailscaleIPs") or []
+            if ips:
+                return str(ips[0]).split("/", 1)[0]
+
         peers = status_data.get("Peer") or {}
         for peer in peers.values():
             if not peer.get("ExitNode"):
                 continue
 
-            dns_name = str(peer.get("DNSName") or "").strip()
-            if dns_name:
-                return dns_name.rstrip(".")
+            return self.describe_peer(peer)
+        return None
 
-            host_name = str(peer.get("HostName") or "").strip()
-            if host_name:
-                return host_name
+    def find_peer_by_id(self, status_data: dict, peer_id: str) -> dict | None:
+        if not peer_id:
+            return None
 
-            ips = peer.get("TailscaleIPs") or []
-            if ips:
-                return str(ips[0])
+        peers = status_data.get("Peer") or {}
+        for peer in peers.values():
+            if str(peer.get("ID") or "") == peer_id:
+                return peer
+        return None
+
+    def describe_peer(self, peer: dict) -> str | None:
+        dns_name = str(peer.get("DNSName") or "").strip()
+        if dns_name:
+            return dns_name.rstrip(".")
+
+        host_name = str(peer.get("HostName") or "").strip()
+        if host_name:
+            return host_name
+
+        ips = peer.get("TailscaleIPs") or []
+        if ips:
+            return str(ips[0]).split("/", 1)[0]
         return None
 
     def node_matches_current(self, node: ExitNode, current_exit_node: str | None) -> bool:
