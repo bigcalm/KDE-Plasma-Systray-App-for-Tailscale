@@ -1,5 +1,9 @@
 # Tailscale Exit Node Tray
 
+> [!IMPORTANT]
+> This project is now obsolete because Tailscale provides an official Linux desktop systray client.
+> See: https://tailscale.com/docs/features/client/linux-systray
+
 Switch Tailscale exit nodes from your KDE Plasma tray instead of typing `tailscale set --exit-node=...` by hand.
 
 This app adds a small Plasma tray icon with three clear states:
