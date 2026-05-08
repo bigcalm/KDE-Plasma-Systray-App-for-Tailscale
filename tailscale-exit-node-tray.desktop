@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=Tailscale Exit Node Tray
+Comment=Manage Tailscale exit nodes from the system tray
+Exec=tailscale-exit-node-tray
+Icon=tailscale-exit-node-tray
+Terminal=false
+Categories=Network;Utility;
+StartupNotify=false
+X-GNOME-UsesNotifications=true
